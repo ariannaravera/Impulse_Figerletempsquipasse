@@ -19,7 +19,7 @@ def count_images_per_folder(directory, folders):
     print('min and max number of images: ', int(np.min(n_images)), int(np.max(n_images)))
     print('----------------------------------------------------------------------')
 
-def generate_stack(directory):
+def generate_stack(results_directory, directory):
     print('-------------------------------')
     print('Creation of the stack...')
     names = []
@@ -55,28 +55,28 @@ def generate_stack(directory):
         file.write(item+"\n")
     file.close()
     try:
-        tifffile.imwrite('results/image_stack.tif', image_stack, imagej=True, metadata={'axes': 'TYX'})
-        tifffile.imwrite('results/image_stack_R.tif', image_stack_R, imagej=True, metadata={'axes': 'TYX'})
-        tifffile.imwrite('results/image_stack_G.tif', image_stack_G, imagej=True, metadata={'axes': 'TYX'})
-        tifffile.imwrite('results/image_stack_B.tif', image_stack_B, imagej=True, metadata={'axes': 'TYX'})
+        tifffile.imwrite(results_directory+'image_stack.tif', image_stack, imagej=True, metadata={'axes': 'TYX'})
+        tifffile.imwrite(results_directory+'image_stack_R.tif', image_stack_R, imagej=True, metadata={'axes': 'TYX'})
+        tifffile.imwrite(results_directory+'image_stack_G.tif', image_stack_G, imagej=True, metadata={'axes': 'TYX'})
+        tifffile.imwrite(results_directory+'image_stack_B.tif', image_stack_B, imagej=True, metadata={'axes': 'TYX'})
     except:
-        tifffile.imwrite('results/image_stack.tif', image_stack)
-        tifffile.imwrite('results/image_stack_R.tif', image_stack_R)
-        tifffile.imwrite('results/image_stack_G.tif', image_stack_G)
-        tifffile.imwrite('results/image_stack_B.tif', image_stack_B)
+        tifffile.imwrite(results_directory+'image_stack.tif', image_stack)
+        tifffile.imwrite(results_directory+'image_stack_R.tif', image_stack_R)
+        tifffile.imwrite(results_directory+'image_stack_G.tif', image_stack_G)
+        tifffile.imwrite(results_directory+'image_stack_B.tif', image_stack_B)
     
     print('Stacks saved')
     print('-------------------------------')
     return image_stack
     
-def align_stack(tmats_path = None):
+def align_stack(results_directory, tmats_path = None):
     print('-------------------------------')
     print('Alignment of the stack...')
 
-    image_stack_R = tifffile.imread('results/image_stack_R.tif')
-    image_stack_G = tifffile.imread('results/image_stack_G.tif')
-    image_stack_B = tifffile.imread('results/image_stack_B.tif')
-    image_stack = tifffile.imread('results/image_stack.tif')
+    image_stack_R = tifffile.imread(results_directory+'image_stack_R.tif')
+    image_stack_G = tifffile.imread(results_directory+'image_stack_G.tif')
+    image_stack_B = tifffile.imread(results_directory+'image_stack_B.tif')
+    image_stack = tifffile.imread(results_directory+'image_stack.tif')
     # Align each frame at the previous one
     sr = StackReg(StackReg.TRANSLATION)
     
@@ -89,7 +89,7 @@ def align_stack(tmats_path = None):
         transformation_matrices = np.zeros((tmats_float.shape[0], 3), dtype=np.int16)
         transformation_matrices[:, 0] = np.arange(1, tmats_float.shape[0]+1)
         transformation_matrices[:, 1:3] = tmats_float[:, 0:2, 2].astype(int)
-        np.savetxt('results/transformationMatrix.txt', transformation_matrices, header = 'timePoint, align_t_x, align_t_y', delimiter = ';')
+        np.savetxt(results_directory+'transformationMatrix.txt', transformation_matrices, header = 'timePoint, align_t_x, align_t_y', delimiter = ';')
         
     # Upload the tmats
     else:
@@ -115,12 +115,12 @@ def align_stack(tmats_path = None):
     image_stack_aligned_rgb[:,1,:,:] = image_stack_aligned_G
     image_stack_aligned_rgb[:,2,:,:] = image_stack_aligned_B
     try:
-        """tifffile.imwrite('results/stack_aligned_R.tif', image_stack_aligned_R, imagej=True, metadata={'axes': 'TYX'})
-        tifffile.imwrite('results/stack_aligned_G.tif', image_stack_aligned_G, imagej=True, metadata={'axes': 'TYX'})
-        tifffile.imwrite('results/stack_aligned_B.tif', image_stack_aligned_B, imagej=True, metadata={'axes': 'TYX'})"""
-        tifffile.imwrite('results/stack_aligned_RGB.tif', image_stack_aligned_rgb, imagej=True, metadata={'axes': 'TCYX'})
+        """tifffile.imwrite(results_directory+'stack_aligned_R.tif', image_stack_aligned_R, imagej=True, metadata={'axes': 'TYX'})
+        tifffile.imwrite(results_directory+'stack_aligned_G.tif', image_stack_aligned_G, imagej=True, metadata={'axes': 'TYX'})
+        tifffile.imwrite(results_directory+'stack_aligned_B.tif', image_stack_aligned_B, imagej=True, metadata={'axes': 'TYX'})"""
+        tifffile.imwrite(results_directory+'stack_aligned_RGB.tif', image_stack_aligned_rgb, imagej=True, metadata={'axes': 'TCYX'})
     except:
-        tifffile.imwrite('results/stack_aligned_RGB.tif', image_stack_aligned_rgb)
+        tifffile.imwrite(results_directory+'stack_aligned_RGB.tif', image_stack_aligned_rgb)
     print('Aligned stack saved!')
     print('-------------------------------')
 
@@ -163,12 +163,12 @@ def equalize_image(image_src, gray_scale=False):
         image_eq = enhance_contrast(image_matrix=image_src)
     return image_eq
 
-def mosaic():
+def mosaic(results_directory):
     print('-------------------------------')
     print('Complete mosaic generation...')
     image_res = np.zeros((720, 1280, 3), dtype='uint8')
     column = 0
-    image_stack_aligned = tifffile.imread('results/image_stack_aligned_rgb.tif')
+    image_stack_aligned = tifffile.imread(results_directory+'image_stack_aligned_rgb.tif')
     
     names = open("names.txt", "r").read()
     dates = [n.split('-')[2] for n in names.split("\n")]
@@ -184,22 +184,22 @@ def mosaic():
             
         column += 5
     # Save result
-    tifffile.imwrite('results/mosaic_image.tif', image_res)
+    tifffile.imwrite(results_directory+'mosaic_image.tif', image_res)
 
     plt.figure()
     plt.imshow(image_res)
     plt.xticks(np.arange(1, 1281, 75), dates[50:306:15], rotation='vertical')
     plt.yticks([])
-    plt.savefig('results/mosaic_image_dates.jpg', bbox_inches='tight', dpi=200)
+    plt.savefig(results_directory+'mosaic_image_dates.jpg', bbox_inches='tight', dpi=200)
 
     print('Image saved!')
     print('-------------------------------')
 
-def chessboard():
+def chessboard(results_directory):
     print('-------------------------------')
     print('Chessboard image generation...')
     image_res = np.zeros((720, 1280, 3), dtype='uint8')
-    image_stack_aligned = tifffile.imread('results/image_stack_aligned_rgb.tif')
+    image_stack_aligned = tifffile.imread(results_directory+'image_stack_aligned_rgb.tif')
     
     """names = open("names.txt", "r").read()
     dates = [n.split('-')[2] for n in names.split("\n")]
@@ -209,13 +209,13 @@ def chessboard():
         for column in range(0, 1280, step):
             # 5 pixel columns for each image in analysis
             for row in range(0, 720, step):
-                if column < 300: frame = randrange(50, 150)
-                if column > 300 and column < 700: frame = randrange(150, 300)
+                if column < 500: frame = randrange(50, 150)
+                if column > 500 and column < 700: frame = randrange(150, 300)
                 if column >700: frame = randrange(300, 468)
                 image = equalize_image(image_stack_aligned[frame])
                 image_res[row:row+step,column:column+step, :] = image[row:row+step,column:column+step, :].copy()
         # Save result
-        tifffile.imwrite('results/chessboard_step'+str(step)+'_image.tif', image_res, imagej=True)
+        tifffile.imwrite(results_directory+'chessboard_step'+str(step)+'_image.tif', image_res, imagej=True)
 
     print('Image saved!')
     print('-------------------------------')
@@ -229,16 +229,17 @@ def main():
     # crop the votex
     
     directory = '/Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/summary_1200/'
+    results_directory = '/Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/Arianna_results/'
     folders = os.listdir(directory)
     folders.sort()
-    if not os.path.exists('results/'):
-        os.mkdir('results/')
+    if not os.path.exists(results_directory+''):
+        os.mkdir(results_directory+'')
     
     #count_images_per_folder(directory, folders)
-    #generate_stack(directory)
-    #align_stack('results/transformationMatrix.txt')
-    #mosaic()
-    chessboard()
+    #generate_stack(results_directory, directory)
+    #align_stack(results_directory, results_directory+'transformationMatrix.txt')
+    #mosaic(results_directory)
+    chessboard(results_directory)
     
 	
 if __name__ == "__main__":
