@@ -9,7 +9,16 @@ from mozaic import create_mozaic
 import random
 
 
-def count_images_per_folder(data_directory, folders):
+def count_images_per_folder(data_directory):
+    """
+    Counts the number of images for each folder in the data directory.
+    
+    Parameters
+    ----------
+    data_directory : string
+        directory in which we have one folder per day,
+        eg. /Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/vortex/
+    """
     folders = os.listdir(data_directory)
     folders.sort()
     n_images = []
@@ -22,20 +31,38 @@ def count_images_per_folder(data_directory, folders):
     print('min and max number of images: ', int(np.min(n_images)), int(np.max(n_images)))
     print('----------------------------------------------------------------------')
 
-def generate_stack(results_directory, data_directory):
+def generate_stack(data_directory, vortex_start_date, vortex_end_date, error_dates, results_directory):
+    """
+    Generate stack of filtered images taken from data_directory and
+    the txt file called usable_images_names.txt with their names
+    
+    Parameters
+    ----------
+    data_directory : string
+        directory in which we have the images
+        eg. /Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/summary_1200/
+    vortex_start_date : integer, format yyyymmd
+        date to start the stack (reference to info in ImagesDescription.txt)
+    vortex_end_date : integer, format yyyymmd
+        date to end the stack (reference to info in ImagesDescription.txt)
+    error_dates : list
+        list of integer dates (yyyymmd) in which there are problems inbetween start and end dates
+        (reference to info in ImagesDescription.txt)
+    results_directory : string
+        path where to save results
+
+    """
     print('-------------------------------')
     print('Creation of the stack...')
-    names = []
-    image_stack = np.zeros((468, 720, 1280), dtype='uint8')
-    image_stack_R = np.zeros((468, 720, 1280), dtype='uint8')
-    image_stack_G = np.zeros((468, 720, 1280), dtype='uint8')
-    image_stack_B  = np.zeros((468, 720, 1280), dtype='uint8')
 
-    vortex_start_date = 20171004
-    vortex_end_date = 20200608
-    different_view = [20191128]
+    max_n_images = len(os.listdir(data_directory))
+    images_shape = np.asarray(Image.open(os.path.join(data_directory, os.listdir(data_directory)[0]))).shape
+    # for summary_1200 folder: (945 720 1280)
+    names = []
+    image_stack = np.zeros((max_n_images, images_shape[0], images_shape[1]), dtype='uint8')
+    image_stack_rgb = np.zeros((max_n_images, 3, images_shape[0], images_shape[1]), dtype='uint8')
     
-    images = [f for f in os.listdir(os.path.join(data_directory)) if int(f.split('-')[2]) > vortex_start_date and int(f.split('-')[2]) < vortex_end_date and int(f.split('-')[2]) not in different_view]
+    images = [f for f in os.listdir(os.path.join(data_directory)) if not f.startswith('.') and int(f.split('-')[2]) > vortex_start_date and int(f.split('-')[2]) < vortex_end_date and int(f.split('-')[2]) not in error_dates]
     images.sort()
     n = 0
     for image_name in images:
@@ -48,9 +75,9 @@ def generate_stack(results_directory, data_directory):
             if fm > 2000:
                 # Add the image into the stack
                 image_stack[n] = gray
-                image_stack_R[n] = image[:,:,0]
-                image_stack_G[n] = image[:,:,1]
-                image_stack_B[n] = image[:,:,2]
+                image_stack_rgb[n,0,:,:] = image[:,:,0]
+                image_stack_rgb[n,1,:,:] = image[:,:,1]
+                image_stack_rgb[n,2,:,:] = image[:,:,2]
                 names.append(image_name)
                 n+=1
     file = open('usable_images_names.txt','w')
@@ -58,28 +85,43 @@ def generate_stack(results_directory, data_directory):
         file.write(item+"\n")
     file.write(names[-1])
     file.close()
+
+    image_stack = image_stack[:n, :, :]
+    image_stack_rgb = image_stack_rgb[:n, :, :]
     try:
         tifffile.imwrite(results_directory+'image_stack.tif', image_stack, imagej=True, metadata={'axes': 'TYX'})
-        tifffile.imwrite(results_directory+'image_stack_R.tif', image_stack_R, imagej=True, metadata={'axes': 'TYX'})
-        tifffile.imwrite(results_directory+'image_stack_G.tif', image_stack_G, imagej=True, metadata={'axes': 'TYX'})
-        tifffile.imwrite(results_directory+'image_stack_B.tif', image_stack_B, imagej=True, metadata={'axes': 'TYX'})
+        tifffile.imwrite(results_directory+'image_stack_rgb.tif', image_stack_rgb, imagej=True, metadata={'axes': 'TCYX'})
     except:
         tifffile.imwrite(results_directory+'image_stack.tif', image_stack)
-        tifffile.imwrite(results_directory+'image_stack_R.tif', image_stack_R)
-        tifffile.imwrite(results_directory+'image_stack_G.tif', image_stack_G)
-        tifffile.imwrite(results_directory+'image_stack_B.tif', image_stack_B)
+        tifffile.imwrite(results_directory+'image_stack_rgb.tif', image_stack_rgb)
     
     print('Stacks saved')
     print('-------------------------------')
     return image_stack
     
 def align_stack(results_directory, tmats_path = None):
+    """
+    Align the stack prevuosly generated
+    
+    Parameters
+    ----------
+    results_directory : string
+        path where the stack has been saved
+    vortex_start_date : integer, format yyyymmd
+        date to start the stack (reference to info in ImagesDescription.txt)
+    vortex_end_date : integer, format yyyymmd
+        date to end the stack (reference to info in ImagesDescription.txt)
+    error_dates : list
+        list of integer dates (yyyymmd) in which there are problems inbetween start and end dates
+        (reference to info in ImagesDescription.txt)
+    results_directory : string
+        path where to save results
+
+    """
     print('-------------------------------')
     print('Alignment of the stack...')
 
-    image_stack_R = tifffile.imread(results_directory+'image_stack_R.tif')
-    image_stack_G = tifffile.imread(results_directory+'image_stack_G.tif')
-    image_stack_B = tifffile.imread(results_directory+'image_stack_B.tif')
+    image_stack_rgb = tifffile.imread(results_directory+'image_stack_rgb.tif')
     image_stack = tifffile.imread(results_directory+'image_stack.tif')
     # Align each frame at the previous one
     sr = StackReg(StackReg.TRANSLATION)
@@ -97,7 +139,7 @@ def align_stack(results_directory, tmats_path = None):
         
     # Upload the tmats
     else:
-        tmats_float = np.zeros((image_stack_R.shape[0], 3, 3), dtype='float64')
+        tmats_float = np.zeros((image_stack.shape[0], 3, 3), dtype='float64')
         with open(tmats_path) as f:
             next(f)
             for i, line in enumerate(f):
@@ -112,9 +154,9 @@ def align_stack(results_directory, tmats_path = None):
     image_stack_aligned_B = np.zeros((468, 720, 1280), dtype='uint8')
     image_stack_aligned_rgb = np.zeros((468, 3, 720, 1280), dtype='uint8')
     
-    image_stack_aligned_R = sr.transform_stack(image_stack_R, tmats=tmats_float.astype(int)).astype('uint8')
-    image_stack_aligned_G = sr.transform_stack(image_stack_G, tmats=tmats_float.astype(int)).astype('uint8')
-    image_stack_aligned_B = sr.transform_stack(image_stack_B, tmats=tmats_float.astype(int)).astype('uint8')
+    image_stack_aligned_R = sr.transform_stack(image_stack_rgb[:, 0, :, :], tmats=tmats_float.astype(int)).astype('uint8')
+    image_stack_aligned_G = sr.transform_stack(image_stack_rgb[:, 1, :, :], tmats=tmats_float.astype(int)).astype('uint8')
+    image_stack_aligned_B = sr.transform_stack(image_stack_rgb[:, 2, :, :], tmats=tmats_float.astype(int)).astype('uint8')
     image_stack_aligned_rgb[:,0,:,:] = image_stack_aligned_R
     image_stack_aligned_rgb[:,1,:,:] = image_stack_aligned_G
     image_stack_aligned_rgb[:,2,:,:] = image_stack_aligned_B
@@ -467,7 +509,7 @@ def mozaic(data_directory, results_directory, imagenames_list, num_bins_x, num_b
     print('Mozaic generation...')
 
     dimensions = [720, 1280, 3] # [height, width, channels]   
-    result_image = np.zeros((dimensions[2], dimensions[0], dimensions[1]))
+    result_image = np.zeros((dimensions[2], dimensions[0], dimensions[1]), dtype='uint8')
     
     mozaic_data = create_mozaic(dimensions[1], dimensions[0], num_bins_x, num_bins_y, 0, len(imagenames_list), id_list)
     
@@ -490,17 +532,30 @@ def mozaic(data_directory, results_directory, imagenames_list, num_bins_x, num_b
     except:
         tifffile.imwrite(results_directory+'mozaic.tif', result_image)
     
+    result_image = result_image.transpose(1, 2, 0)
+    im = Image.fromarray(result_image)
+    plt.imshow(im)
+    plt.show()
+    im.save(results_directory+'mozaic.jpg')
     print('Mozaic saved')
     print('-------------------------------')
 
 
 def main():
-    data_directory = '/Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/summary_1200/'
-    results_directory = '/Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/Arianna_results/'
+    #results_directory = '/Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/Arianna_results/'
+    results_directory = '/Users/aravera/Documents/Impulse_Figerletempsquipasse/'
     if not os.path.exists(results_directory+''):  os.mkdir(results_directory+'')
     
+    #data_directory = '/Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/vortex/'
     #count_images_per_folder(data_directory)
-    #generate_stack(results_directory, data_directory)
+    
+    data_directory = '/Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/summary_1200/'
+    
+    vortex_start_date = 20171004
+    vortex_end_date = 20200608
+    error_dates = [20191128]
+    #generate_stack(data_directory, vortex_start_date, vortex_end_date, error_dates, results_directory)
+    
     #align_stack(results_directory, results_directory+'transformationMatrix.txt')
     #timelines(results_directory)
     #chessboard(results_directory)
@@ -533,7 +588,7 @@ def main():
     num_bins_y = 20
     # Create and save mozaic image
     mozaic(data_directory, results_directory, usable_images_names, num_bins_x, num_bins_y, id_list)
-
+    
     
 	
 if __name__ == "__main__":
