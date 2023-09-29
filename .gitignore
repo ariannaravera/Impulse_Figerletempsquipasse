@@ -1,6 +1,11 @@
 /.DS_Store
 /movie_over_all.py
-/r*.tif
+/*.tif
+/.tif
 /results
 /*.pptx
-
+/.pptx
+/*.png
+/.png
+/*.jpg
+/.jpg
