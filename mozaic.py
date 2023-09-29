@@ -76,9 +76,9 @@ def create_mozaic(image_width, image_height, num_bins_x, num_bins_y, min_id, max
     # Clip the interpolated ids to the specified range
     interpolated_id = np.clip(interpolated_id, min_id, max_id)
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    """fig, ax = plt.subplots(figsize=(10, 8))
     c = ax.pcolormesh(x_bins, y_bins, interpolated_id.reshape(num_bins_y, num_bins_x), shading='auto')
-    """plt.colorbar(c, label='Date (seconds)')
+    plt.colorbar(c, label='Date (seconds)')
     plt.xlabel('X Bins')
     plt.ylabel('Y Bins')
     plt.title('Mozaic Interpolation')
