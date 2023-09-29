@@ -5,23 +5,24 @@ import numpy as np
 import tifffile
 import cv2
 from pystackreg import StackReg
-from random import randrange
 from mozaic import create_mozaic
 import random
 
 
-def count_images_per_folder(directory, folders):
+def count_images_per_folder(data_directory, folders):
+    folders = os.listdir(data_directory)
+    folders.sort()
     n_images = []
     for folder in folders:
         if folder != '.DS_Store':
-            n_images.append(len(os.path.join(directory, folder)))
+            n_images.append(len(os.path.join(data_directory, folder)))
     
     print('----------------------------------------------------------------------')
     print('There are '+str(len(folders))+' folders, containg an average of '+str(int(np.mean(n_images)))+' images each.')
     print('min and max number of images: ', int(np.min(n_images)), int(np.max(n_images)))
     print('----------------------------------------------------------------------')
 
-def generate_stack(results_directory, directory):
+def generate_stack(results_directory, data_directory):
     print('-------------------------------')
     print('Creation of the stack...')
     names = []
@@ -34,11 +35,11 @@ def generate_stack(results_directory, directory):
     vortex_end_date = 20200608
     different_view = [20191128]
     
-    images = [f for f in os.listdir(os.path.join(directory)) if int(f.split('-')[2]) > vortex_start_date and int(f.split('-')[2]) < vortex_end_date and int(f.split('-')[2]) not in different_view]
+    images = [f for f in os.listdir(os.path.join(data_directory)) if int(f.split('-')[2]) > vortex_start_date and int(f.split('-')[2]) < vortex_end_date and int(f.split('-')[2]) not in different_view]
     images.sort()
     n = 0
     for image_name in images:
-        image = np.asarray(Image.open(os.path.join(directory, image_name)))
+        image = np.asarray(Image.open(os.path.join(data_directory, image_name)))
         # If the image is not too "white"
         if image.mean() < 131:
             gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
@@ -52,7 +53,7 @@ def generate_stack(results_directory, directory):
                 image_stack_B[n] = image[:,:,2]
                 names.append(image_name)
                 n+=1
-    file = open('names.txt','w')
+    file = open('usable_images_names.txt','w')
     for item in names[:-1]:
         file.write(item+"\n")
     file.write(names[-1])
@@ -172,7 +173,7 @@ def timelines(results_directory):
     image_stack_aligned = tifffile.imread(results_directory+'image_stack_aligned_rgb.tif')
     image_res = np.zeros((image_stack_aligned.shape[1], image_stack_aligned.shape[2], 3), dtype='uint8')
     
-    names = open("names.txt", "r").read()
+    names = open("usable_images_names.txt", "r").read()
     dates = [n.split('-')[2] for n in names.split("\n")]
     dates = [d[6:8]+'/'+d[4:6]+'/'+d[0:4] for d in dates]
 
@@ -208,7 +209,7 @@ def timelines_not_aligned(results_directory):
     image_res_G = np.zeros((image_stack_R.shape[1], image_stack_R.shape[2]), dtype='uint8')
     image_res_B = np.zeros((image_stack_R.shape[1], image_stack_R.shape[2]), dtype='uint8')
 
-    names = open("names.txt", "r").read()
+    names = open("usable_images_names.txt", "r").read()
     dates = [n.split('-')[2] for n in names.split("\n")]
     dates = [d[6:8]+'/'+d[4:6]+'/'+d[0:4] for d in dates]
 
@@ -254,7 +255,7 @@ def trees_timelines(results_directory):
     image_stack_aligned = image_stack_aligned[:, 350:,:600, :]
     image_res = np.zeros((image_stack_aligned.shape[1], 768, 3), dtype='uint8')
     
-    names = open("names.txt", "r").read()
+    names = open("usable_images_names.txt", "r").read()
     dates = [n.split('-')[2] for n in names.split("\n")]
     dates = [d[6:8]+'/'+d[4:6]+'/'+d[0:4] for d in dates]
 
@@ -291,7 +292,7 @@ def chessboard(results_directory):
     image_res = np.zeros((720, 1280, 3), dtype='uint8')
     image_stack_aligned = tifffile.imread(results_directory+'image_stack_aligned_rgb.tif')
     
-    """names = open("names.txt", "r").read()
+    """names = open("usable_images_names.txt", "r").read()
     dates = [n.split('-')[2] for n in names.split("\n")]
     dates = [d[6:8]+'/'+d[4:6]+'/'+d[0:4] for d in dates]"""
     steps = [20, 40, 80]
@@ -299,8 +300,8 @@ def chessboard(results_directory):
         for column in range(0, 1280, step):
             # 5 pixel columns for each image in analysis
             for row in range(0, 720, step):
-                if column < 700: frame = randrange(50, 150)
-                if column > 700: frame = randrange(150, 468)
+                if column < 700: frame = random.randrange(50, 150)
+                if column > 700: frame = random.randrange(150, 468)
                 image = equalize_image(image_stack_aligned[frame])
                 image_res[row:row+step,column:column+step, :] = image[row:row+step,column:column+step, :].copy()
         # Save result
@@ -310,7 +311,7 @@ def chessboard(results_directory):
     print('-------------------------------')
 
 
-def generate_daily_stack(results_directory, directory, date):
+def generate_daily_stack(results_directory, data_directory, date):
     print('-------------------------------')
     print('Creation of the stack...')
     names = []
@@ -319,12 +320,12 @@ def generate_daily_stack(results_directory, directory, date):
     image_stack_G = np.zeros((481, 720, 1280), dtype='uint8')
     image_stack_B  = np.zeros((481, 720, 1280), dtype='uint8')
     
-    images = os.listdir(directory)
+    images = os.listdir(data_directory)
     images.sort()
     n = 0
     
     for image_name in images[::2]:
-        image = np.asarray(Image.open(os.path.join(directory, image_name)))
+        image = np.asarray(Image.open(os.path.join(data_directory, image_name)))
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         image_stack[n] = gray
         image_stack_R[n] = image[:,:,0]
@@ -461,38 +462,45 @@ def daily_timelines(results_directory):
     print('-------------------------------')
 
 
-def mozaic(directory, results_directory, imagenames_list, num_bins_x, num_bins_y, date_list):
+def mozaic(data_directory, results_directory, imagenames_list, num_bins_x, num_bins_y, id_list):
+    print('-------------------------------')
+    print('Mozaic generation...')
+
     dimensions = [720, 1280, 3] # [height, width, channels]   
-    result_image = np.zeros((dimensions))
-
-    mozaic_data = create_mozaic(dimensions[1], dimensions[0], num_bins_x, num_bins_y, min_date, max_date, date_list)
+    result_image = np.zeros((dimensions[2], dimensions[0], dimensions[1]))
     
-    for el in mozaic_data:
-        x_pos, y_pos, date = el
-        image_name = None
-        for n in imagenames_list:
-            if date.replace('-','') in n: #eg. n = cam-cub-20171006-1200552463.jpg
-                image_name = n 
-        if image_name:
-            image = np.asarray(Image.open(os.path.join(directory, image_name)))
-            # insert pixel x,y in result image
-            result_image[x_pos, y_pos, :] = image[x_pos, y_pos, :]
-        else:
-            ('WARNING! Image with date '+str(date)+' not found!')
+    mozaic_data = create_mozaic(dimensions[1], dimensions[0], num_bins_x, num_bins_y, 0, len(imagenames_list), id_list)
     
-    tifffile.imwrite(results_directory+'mozaic.tif', result_image, imagej=True)
+    unique_id_mozaic = np.unique([int(i) for x,y,i in mozaic_data])
+    for date_id in list(unique_id_mozaic):
+        image_name = imagenames_list[int(date_id)]
+        image = np.asarray(Image.open(os.path.join(data_directory, image_name)))
+        found = False
+        for el in mozaic_data:
+            x_pos, y_pos, id = el
+            id = int(id)
+            if id == date_id:
+                found = True
+                result_image[:, y_pos, x_pos] = image[y_pos, x_pos, :]
+        if not found:
+            print(found, image_name)
+
+    try:
+        tifffile.imwrite(results_directory+'mozaic.tif', result_image, imagej=True, metadata={'axes':'CYX'})
+    except:
+        tifffile.imwrite(results_directory+'mozaic.tif', result_image)
+    
+    print('Mozaic saved')
+    print('-------------------------------')
 
 
-def main():    
-    directory = '/Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/summary_1200/'
-    results_directory = '/Users/aravera/Documents/Impulse_Figerletempsquipasse/'#'/Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/Arianna_results/'
-    folders = os.listdir(directory)
-    folders.sort()
-    if not os.path.exists(results_directory+''):
-        os.mkdir(results_directory+'')
+def main():
+    data_directory = '/Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/summary_1200/'
+    results_directory = '/Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/Arianna_results/'
+    if not os.path.exists(results_directory+''):  os.mkdir(results_directory+'')
     
-    #count_images_per_folder(directory, folders)
-    #generate_stack(results_directory, directory)
+    #count_images_per_folder(data_directory)
+    #generate_stack(results_directory, data_directory)
     #align_stack(results_directory, results_directory+'transformationMatrix.txt')
     #timelines(results_directory)
     #chessboard(results_directory)
@@ -502,27 +510,29 @@ def main():
     #daily_timelines(results_directory)
 
     # List of available images
-    imagenames_list = open("names.txt", "r").read()
-    # Corresponding list of dates in format yyy-mm-dd
-    imagedates_list = [n.split('-')[2] for n in imagenames_list.split("\n")]
-    imagedates_list = [d[0:4]+'-'+d[4:6]+'-'+d[6:8] for d in imagedates_list] 
+    usable_images_names = open("usable_images_names.txt", "r").read()
+    usable_images_names = usable_images_names.split("\n")
+    # List of available images dates - yyyymmdd
+    usable_images_dates = [d.split('-')[2][0:4]+d.split('-')[2][4:6]+d.split('-')[2][6:8] for d in usable_images_names]
+
+    # Choosing random dates as starting points for "id_list"
+    choosen_dates = random.sample(usable_images_dates, 4)
+    # If instead you want to choose predefined dates: 
+    # check in the "name.txt" file that the date is in the list of available ones!
+    # format: yyyymmdd
+    choosen_dates = ['20171005', '20180213', '20190522', '20200605']
+
+    # In date_list (x, y) positions must be values within [0, 1] x [0, 1] and they should NOT be collinear
+    id_list = [(0.01, 0.01, usable_images_dates.index(choosen_dates[0])), 
+                 (0.01, 0.99, usable_images_dates.index(choosen_dates[1])), 
+                 (0.99,0.01, usable_images_dates.index(choosen_dates[2])), 
+                 (0.99, 0.99, usable_images_dates.index(choosen_dates[3]))]
     # Number of horizontal "boxes" in the output mozaic image
-    num_bins_x = 300 
+    num_bins_x = 20 
     # Number of vertical "boxes" in the output mozaic image
-    num_bins_y = 100  
-    
-    # In date_list (x, y) positions must be values within [0, 1] x [0, 1] and they should NOT be collinear, e.g.
-    # BAD: date_list = [(0.1, 0.1, "2021-09-26"), (0.5, 0.5, "2022-05-02"), (0.9, 0.9, "2022-03-27")]
-    # GOOD: date_list = [(0.15, 0.1, "2021-09-26"), (0.3, 0.5, "2022-05-02"), (0.7, 0.9, "2022-03-27")]
-    
-    random_dates = random.sample(imagedates_list, 4) # choosing random dates as starting points
-    
-    date_list = [(0.01, 0.01, random_dates[0]),
-                 (0.01, 0.99, random_dates[1]),
-                 (0.99,0.01, random_dates[2]),
-                 (0.99, 0.99, random_dates[3])]
+    num_bins_y = 20
     # Create and save mozaic image
-    mozaic(directory, results_directory, imagenames_list, num_bins_x, num_bins_y, date_list)
+    mozaic(data_directory, results_directory, usable_images_names, num_bins_x, num_bins_y, id_list)
 
     
 	
