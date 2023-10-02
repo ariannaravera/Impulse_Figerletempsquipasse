@@ -31,6 +31,48 @@ def count_images_per_folder(data_directory):
     print('min and max number of images: ', int(np.min(n_images)), int(np.max(n_images)))
     print('----------------------------------------------------------------------')
 
+def enhance_contrast(image_matrix, bins=256):
+    """
+    Enhance the contrast of the image
+    """
+    image_flattened = image_matrix.flatten()
+    image_hist = np.zeros(bins)
+
+    # frequency count of each pixel
+    for pix in image_matrix:
+        image_hist[pix] += 1
+
+    # cummulative sum
+    cum_sum = np.cumsum(image_hist)
+    norm = (cum_sum - cum_sum.min()) * 255
+    # normalization of the pixel values
+    n_ = cum_sum.max() - cum_sum.min()
+    uniform_norm = norm / n_
+    uniform_norm = uniform_norm.astype('int')
+
+    # flat histogram
+    image_eq = uniform_norm[image_flattened]
+    # reshaping the flattened matrix to its original shape
+    image_eq = np.reshape(a=image_eq, newshape=image_matrix.shape)
+
+    return image_eq
+
+def equalize_image(image_src, gray_scale=False):
+    if not gray_scale:
+        r_image = image_src[:, :, 0]
+        g_image = image_src[:, :, 1]
+        b_image = image_src[:, :, 2]
+
+        r_image_eq = enhance_contrast(image_matrix=r_image)
+        g_image_eq = enhance_contrast(image_matrix=g_image)
+        b_image_eq = enhance_contrast(image_matrix=b_image)
+
+        image_eq = np.dstack(tup=(r_image_eq, g_image_eq, b_image_eq))
+    else:
+        image_eq = enhance_contrast(image_matrix=image_src)
+    return image_eq
+
+
 def generate_stack(data_directory, vortex_start_date, vortex_end_date, error_dates, results_directory):
     """
     Generate stack of filtered images taken from data_directory and
@@ -106,16 +148,9 @@ def align_stack(results_directory, tmats_path = None):
     Parameters
     ----------
     results_directory : string
-        path where the stack has been saved
-    vortex_start_date : integer, format yyyymmd
-        date to start the stack (reference to info in ImagesDescription.txt)
-    vortex_end_date : integer, format yyyymmd
-        date to end the stack (reference to info in ImagesDescription.txt)
-    error_dates : list
-        list of integer dates (yyyymmd) in which there are problems inbetween start and end dates
-        (reference to info in ImagesDescription.txt)
-    results_directory : string
-        path where to save results
+        directory where the stack has been saved
+    tmats_path : string
+        path to the .txt file with the pre-saved tmats to use
 
     """
     print('-------------------------------')
@@ -164,60 +199,32 @@ def align_stack(results_directory, tmats_path = None):
         """tifffile.imwrite(results_directory+'stack_aligned_R.tif', image_stack_aligned_R, imagej=True, metadata={'axes': 'TYX'})
         tifffile.imwrite(results_directory+'stack_aligned_G.tif', image_stack_aligned_G, imagej=True, metadata={'axes': 'TYX'})
         tifffile.imwrite(results_directory+'stack_aligned_B.tif', image_stack_aligned_B, imagej=True, metadata={'axes': 'TYX'})"""
-        tifffile.imwrite(results_directory+'stack_aligned_RGB.tif', image_stack_aligned_rgb, imagej=True, metadata={'axes': 'TCYX'})
+        tifffile.imwrite(results_directory+'stack_aligned_rgb.tif', image_stack_aligned_rgb, imagej=True, metadata={'axes': 'TCYX'})
     except:
-        tifffile.imwrite(results_directory+'stack_aligned_RGB.tif', image_stack_aligned_rgb)
+        tifffile.imwrite(results_directory+'stack_aligned_rgb.tif', image_stack_aligned_rgb)
     print('Aligned stack saved!')
     print('-------------------------------')
 
 
-def enhance_contrast(image_matrix, bins=256):
-    image_flattened = image_matrix.flatten()
-    image_hist = np.zeros(bins)
-
-    # frequency count of each pixel
-    for pix in image_matrix:
-        image_hist[pix] += 1
-
-    # cummulative sum
-    cum_sum = np.cumsum(image_hist)
-    norm = (cum_sum - cum_sum.min()) * 255
-    # normalization of the pixel values
-    n_ = cum_sum.max() - cum_sum.min()
-    uniform_norm = norm / n_
-    uniform_norm = uniform_norm.astype('int')
-
-    # flat histogram
-    image_eq = uniform_norm[image_flattened]
-    # reshaping the flattened matrix to its original shape
-    image_eq = np.reshape(a=image_eq, newshape=image_matrix.shape)
-
-    return image_eq
-
-def equalize_image(image_src, gray_scale=False):
-    if not gray_scale:
-        r_image = image_src[:, :, 0]
-        g_image = image_src[:, :, 1]
-        b_image = image_src[:, :, 2]
-
-        r_image_eq = enhance_contrast(image_matrix=r_image)
-        g_image_eq = enhance_contrast(image_matrix=g_image)
-        b_image_eq = enhance_contrast(image_matrix=b_image)
-
-        image_eq = np.dstack(tup=(r_image_eq, g_image_eq, b_image_eq))
-    else:
-        image_eq = enhance_contrast(image_matrix=image_src)
-    return image_eq
-
 def timelines(results_directory):
+    """
+    Generate timeline image from the rgb aligned stack previously saved.
+    
+    Parameters
+    ----------
+    results_directory : string
+        directory where the rgb aligned stack has been saved and where to save the timeline
+
+    """
     print('-------------------------------')
     print('Complete timelines generation...')
+
     image_stack_aligned = tifffile.imread(results_directory+'image_stack_aligned_rgb.tif')
     image_res = np.zeros((image_stack_aligned.shape[1], image_stack_aligned.shape[2], 3), dtype='uint8')
     
     names = open("usable_images_names.txt", "r").read()
     dates = [n.split('-')[2] for n in names.split("\n")]
-    dates = [d[6:8]+'/'+d[4:6]+'/'+d[0:4] for d in dates]
+    dates = [d[6:8]+'/'+d[4:6]+'/'+d[0:4] for d in dates] # dd/mm/yyyy
 
     column = 0
     for i in range(256):
@@ -227,7 +234,8 @@ def timelines(results_directory):
         image_col = image[:,column:column+5, :].copy()
         image_res[:,column:column+5, :] = image_col
         column += 5
-    # Save result
+    
+    # Save results
     tifffile.imwrite(results_directory+'timelines_image.tif', image_res)
 
     plt.figure()
@@ -240,16 +248,20 @@ def timelines(results_directory):
     print('-------------------------------')
 
 def timelines_not_aligned(results_directory):
+    """
+    Generate timeline image from the rgb stack NOT aligned previously saved.
+    
+    Parameters
+    ----------
+    results_directory : string
+        directory where the rgb aligned stack has been saved and where to save the timeline
+
+    """
+
     print('-------------------------------')
     print('Complete timelines not aligned generation...')
-    #image_stack= tifffile.imread('/Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/Arianna_results/image_stack.tif')
-    image_stack_R = tifffile.imread('/Users/aravera/Documents/Impulse_Figerletempsquipasse/image_stack_R.tif')
-    image_stack_G = tifffile.imread('/Users/aravera/Documents/Impulse_Figerletempsquipasse/image_stack_G.tif')
-    image_stack_B = tifffile.imread('/Users/aravera/Documents/Impulse_Figerletempsquipasse/image_stack_B.tif')
-    #image_res = np.zeros((image_stack.shape[1], image_stack.shape[2]), dtype='uint8')
-    image_res_R = np.zeros((image_stack_R.shape[1], image_stack_R.shape[2]), dtype='uint8')
-    image_res_G = np.zeros((image_stack_R.shape[1], image_stack_R.shape[2]), dtype='uint8')
-    image_res_B = np.zeros((image_stack_R.shape[1], image_stack_R.shape[2]), dtype='uint8')
+    image_stack = tifffile.imread('/Volumes/RECHERCHE/CTR/CI/DCSR/abarenco/impulse/D2c/rawpix/Arianna_results/image_stack_rgb.tif')
+    image_res = np.zeros((3, image_stack.shape[1], image_stack.shape[2]), dtype='uint8')
 
     names = open("usable_images_names.txt", "r").read()
     dates = [n.split('-')[2] for n in names.split("\n")]
@@ -258,7 +270,7 @@ def timelines_not_aligned(results_directory):
     column = 0
     for i in range(256):
         #image = image_stack[i+50]
-        image_R = image_stack_R[i+50]
+        image_res = image_stack_R[i+50]
         image_G = image_stack_G[i+50]
         image_B = image_stack_B[i+50]
         #image = equalize_image(image)
@@ -290,6 +302,15 @@ def timelines_not_aligned(results_directory):
     print('-------------------------------')
 
 def trees_timelines(results_directory):
+    """
+    Generate trees' timeline image from the rgb aligned stack previously saved.
+    
+    Parameters
+    ----------
+    results_directory : string
+        directory where the rgb aligned stack has been saved and where to save the timeline
+
+    """
     print('-------------------------------')
     print('Trees timelines generation...')
     image_stack_aligned = tifffile.imread('/Users/aravera/Documents/Impulse_Figerletempsquipasse/results/image_stack_aligned_rgb.tif')
@@ -329,6 +350,15 @@ def trees_timelines(results_directory):
 
 
 def chessboard(results_directory):
+    """
+    Generate chessboard image from the rgb aligned stack previously saved.
+    
+    Parameters
+    ----------
+    results_directory : string
+        directory where the rgb aligned stack has been saved and where to save the timeline
+
+    """
     print('-------------------------------')
     print('Chessboard image generation...')
     image_res = np.zeros((720, 1280, 3), dtype='uint8')
@@ -354,6 +384,19 @@ def chessboard(results_directory):
 
 
 def generate_daily_stack(results_directory, data_directory, date):
+    """
+    Generate a daily stack of filtered images taken from data_directory.
+    
+    Parameters
+    ----------
+    results_directory : string
+        directory where the rgb aligned stack has been saved and where to save the timeline
+    data_directory : string
+        directory in which we have the images
+    date : string
+        reference date
+
+    """
     print('-------------------------------')
     print('Creation of the stack...')
     names = []
@@ -397,43 +440,15 @@ def generate_daily_stack(results_directory, data_directory, date):
     return image_stack
  
 def daily_timelines(results_directory):
-    """print('-------------------------------')
-    print('Daily timelines generation...')
-    image_stack_aligned = tifffile.imread(os.path.join(results_directory,'daily_20200319_stack_rgb.tif'))
-    # (481, 720, 1280, 3)
-    image_res = np.zeros((image_stack_aligned.shape[1], image_stack_aligned.shape[2], image_stack_aligned.shape[3]), dtype='uint8')
-
-    n_columns_per_image = 6
-    column = 0
-    for i in range(0, image_stack_aligned.shape[0], 2):
-        image = image_stack_aligned[i]
-        image = equalize_image(image)
-        if column+6 < image_stack_aligned.shape[2]:
-            # n_columns_per_image pixel columns for each image in analysis
-            image_col = image[:,column:column+n_columns_per_image, :].copy()
-            image_res[:,column:column+n_columns_per_image, :] = image_col
-            column += n_columns_per_image
-        else:
-            n_columns_per_image = image_stack_aligned.shape[2] - column
-            image_col = image[:,column:column+n_columns_per_image, :].copy()
-            image_res[:,column:column+n_columns_per_image, :] = image_col
-            column += n_columns_per_image
-    # Save result
-    tifffile.imwrite(results_directory+'timelines_daily.tif', image_res)
-
-    try:
-        names = open("daily_names_20200319.txt", "r").read()
-        #hour format = 0500030986
-        hours = [n.split('-')[3].split('.')[0][:4] for n in names.split("\n")]
-        hours = [h[:2]+':'+h[2:] for h in hours]
-        plt.figure()
-        plt.imshow(image_res)
-        plt.xticks(np.arange(1, 1281, 75), hours[0::28], rotation='vertical')
-        plt.yticks([])
-        plt.savefig(results_directory+'timelines_daily_with_dates.jpg', bbox_inches='tight', dpi=200)
-    except Exception as e:
-        print(e)"""
+    """
+    Generate daily timeline image from the rgb aligned stack previously saved.
     
+    Parameters
+    ----------
+    results_directory : string
+        directory where the rgb aligned stack has been saved and where to save the timeline
+
+    """
     print('-------------------------------')
     print('Daily timelines generation...')
     image_stack_aligned = tifffile.imread(os.path.join(results_directory,'daily_20200319_stack_rgb.tif'))
@@ -505,6 +520,25 @@ def daily_timelines(results_directory):
 
 
 def mozaic(data_directory, results_directory, imagenames_list, num_bins_x, num_bins_y, id_list):
+    """
+    Generate mozaic image from the original images.
+    
+    Parameters
+    ----------
+    data_directory : string
+        directory in which we have the images
+    results_directory : string
+        directory where the rgb aligned stack has been saved and where to save the timelin
+    imagenames_list : list
+        list opf the names of the images to consider
+    num_bins_x : integer
+        Number of horizontal "boxes" in the output mozaic image
+    num_bins_y : integer
+        Number of vertical "boxes" in the output mozaic image
+    id_list : list
+        (x, y) positions must be values within [0, 1] x [0, 1] and they should NOT be collinear
+
+    """
     print('-------------------------------')
     print('Mozaic generation...')
 
@@ -534,8 +568,6 @@ def mozaic(data_directory, results_directory, imagenames_list, num_bins_x, num_b
     
     result_image = result_image.transpose(1, 2, 0)
     im = Image.fromarray(result_image)
-    plt.imshow(im)
-    plt.show()
     im.save(results_directory+'mozaic.jpg')
     print('Mozaic saved')
     print('-------------------------------')
@@ -577,7 +609,7 @@ def main():
     # format: yyyymmdd
     choosen_dates = ['20171005', '20180213', '20190522', '20200605']
 
-    # In date_list (x, y) positions must be values within [0, 1] x [0, 1] and they should NOT be collinear
+    # In id_list (x, y) positions must be values within [0, 1] x [0, 1] and they should NOT be collinear
     id_list = [(0.01, 0.01, usable_images_dates.index(choosen_dates[0])), 
                  (0.01, 0.99, usable_images_dates.index(choosen_dates[1])), 
                  (0.99,0.01, usable_images_dates.index(choosen_dates[2])), 
